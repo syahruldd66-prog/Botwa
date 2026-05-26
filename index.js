@@ -1,4 +1,3 @@
-```javascript
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -10,9 +9,12 @@ const P = require('pino')
 const qrcode = require('qrcode-terminal')
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('session')
 
-  const { version } = await fetchLatestBaileysVersion()
+  const { state, saveCreds } =
+    await useMultiFileAuthState('session')
+
+  const { version } =
+    await fetchLatestBaileysVersion()
 
   const sock = makeWASocket({
     version,
@@ -20,43 +22,60 @@ async function startBot() {
     auth: state
   })
 
-  // QR CODE
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  // SAVE SESSION
+  sock.ev.on('creds.update', saveCreds)
 
+  // CONNECTION
+  sock.ev.on('connection.update', async ({
+    connection,
+    lastDisconnect,
+    qr
+  }) => {
+
+    // QR
     if (qr) {
-      qrcode.generate(qr, { small: true })
-      console.log('Scan QR di WhatsApp')
+      qrcode.generate(qr, {
+        small: true
+      })
+
+      console.log('SCAN QR WHATSAPP')
     }
 
+    // CONNECTED
+    if (connection === 'open') {
+      console.log('BOT CONNECTED')
+    }
+
+    // RECONNECT
     if (connection === 'close') {
+
       const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+        lastDisconnect?.error?.output?.statusCode !==
+        DisconnectReason.loggedOut
 
       if (shouldReconnect) {
         startBot()
       }
     }
-
-    if (connection === 'open') {
-      console.log('✅ Bot WhatsApp berhasil terkoneksi')
-    }
   })
 
-  sock.ev.on('creds.update', saveCreds)
-
   // MESSAGE
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({
+    messages
+  }) => {
+
     try {
+
       const msg = messages[0]
 
       if (!msg.message) return
 
       const from = msg.key.remoteJid
 
-      const isGroup = from.endsWith('@g.us')
+      // GROUP ONLY
+      if (!from.endsWith('@g.us')) return
 
-      if (!isGroup) return
-
+      // MESSAGE TEXT
       const body =
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
@@ -64,48 +83,60 @@ async function startBot() {
 
       const sender = msg.key.participant
 
-      const groupData = await sock.groupMetadata(from)
+      // GROUP DATA
+      const groupMetadata =
+        await sock.groupMetadata(from)
 
-      const admins = groupData.participants
+      const participants =
+        groupMetadata.participants
+
+      // ADMIN LIST
+      const admins = participants
         .filter(v => v.admin)
         .map(v => v.id)
 
-      const isAdmin = admins.includes(sender)
+      // CHECK ADMIN
+      const isAdmin =
+        admins.includes(sender)
 
-      // HANYA ADMIN
+      // ADMIN ONLY
       if (!isAdmin) {
+
         return sock.sendMessage(from, {
-          text: '❌ Command hanya untuk admin grup!'
+          text: 'Command hanya untuk admin grup'
         })
       }
 
       // MENU
       if (body === '.menu') {
+
         return sock.sendMessage(from, {
-          text: `
-╔═══ BOT ADMIN ═══╗
+          text:
+`BOT ADMIN
 
 .menu
 .tagall
 .hidetag
 .kick
 .promote
-.demote
-
-╚════════════════╝
-          `
+.demote`
         })
       }
 
-      // TAG ALL
+      // TAGALL
       if (body === '.tagall') {
 
-        let teks = '📢 TAG ALL\n\n'
+        let teks = 'TAG ALL\n\n'
 
         let mentions = []
 
-        for (let member of groupData.participants) {
-          teks += `@${member.id.split('@')[0]}\n`
+        for (let member of participants) {
+
+          teks +=
+            '@' +
+            member.id.split('@')[0] +
+            '\n'
+
           mentions.push(member.id)
         }
 
@@ -118,9 +149,11 @@ async function startBot() {
       // HIDETAG
       if (body.startsWith('.hidetag')) {
 
-        const text = body.replace('.hidetag', '').trim()
+        const text =
+          body.replace('.hidetag', '').trim()
 
-        let mentions = groupData.participants.map(v => v.id)
+        const mentions =
+          participants.map(v => v.id)
 
         return sock.sendMessage(from, {
           text: text || 'Pesan admin',
@@ -132,11 +165,14 @@ async function startBot() {
       if (body.startsWith('.kick')) {
 
         const mentioned =
-          msg.message.extendedTextMessage?.contextInfo?.mentionedJid
+          msg.message.extendedTextMessage
+          ?.contextInfo
+          ?.mentionedJid
 
         if (!mentioned) {
+
           return sock.sendMessage(from, {
-            text: 'Tag member yang ingin dikick'
+            text: 'Tag member'
           })
         }
 
@@ -147,7 +183,7 @@ async function startBot() {
         )
 
         return sock.sendMessage(from, {
-          text: '✅ Member berhasil dikick'
+          text: 'Member dikick'
         })
       }
 
@@ -155,11 +191,14 @@ async function startBot() {
       if (body.startsWith('.promote')) {
 
         const mentioned =
-          msg.message.extendedTextMessage?.contextInfo?.mentionedJid
+          msg.message.extendedTextMessage
+          ?.contextInfo
+          ?.mentionedJid
 
         if (!mentioned) {
+
           return sock.sendMessage(from, {
-            text: 'Tag member yang ingin dijadikan admin'
+            text: 'Tag member'
           })
         }
 
@@ -170,7 +209,7 @@ async function startBot() {
         )
 
         return sock.sendMessage(from, {
-          text: '✅ Member berhasil dijadikan admin'
+          text: 'Member jadi admin'
         })
       }
 
@@ -178,30 +217,33 @@ async function startBot() {
       if (body.startsWith('.demote')) {
 
         const mentioned =
-          msg.message.extendedTextMessage?.contextInfo?.mentionedJid
+          msg.message.extendedTextMessage
+          ?.contextInfo
+          ?.mentionedJid
 
         if (!mentioned) {
+
           return sock.sendMessage(from, {
-            text: 'Tag admin yang ingin diturunkan'
+            text: 'Tag admin'
           })
         }
 
         await sock.groupParticipantsUpdate(
           from,
-         mentioned,
+          mentioned,
           'demote'
         )
 
         return sock.sendMessage(from, {
-          text: '✅ Admin berhasil diturunkan'
+          text: 'Admin diturunkan'
         })
       }
 
     } catch (err) {
+
       console.log(err)
     }
   })
 }
 
 startBot()
-```
