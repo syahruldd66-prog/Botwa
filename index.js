@@ -114,7 +114,7 @@ async function startBot() {
 
         return sock.sendMessage(from, {
           text:
-`BOT ADMIN
+BOT ADMIN
 
 .menu
 .tagall
